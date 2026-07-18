@@ -17,3 +17,4 @@ Regulatory Compliance RAG Chatbot
 To access fastapi swagger end point use http://127.0.0.1:8000/docs
 
 # uv add streamlit requests
+# streamlit run app/ui/app.py
