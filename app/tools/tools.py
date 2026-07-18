@@ -6,9 +6,13 @@ from psycopg.rows import dict_row
 # PGVector connection string uses SQLAlchemy format: postgresql+psycopg://...
 # psycopg.connect needs standard format: postgresql://...
 _raw_conn = os.getenv("PG_CONNECTION_STRING_FTS")
+RETRIEVAL_K = 20
+RETURN_K = 5
 
 
-def search_fts(query: str, k: int = 5, collection_name: str = "reg_support_desk"):
+def search_fts(
+    query: str, k: int = RETRIEVAL_K, collection_name: str = "reg_support_desk"
+):
     """Keyword search against the stored chunks using Postgres' tsvector/tsquery/ts_rank"""
     sql = """
        SELECT
@@ -42,11 +46,13 @@ def search_fts(query: str, k: int = 5, collection_name: str = "reg_support_desk"
     ]
 
     # print(output)
+    # return output
+    return _sort_by_freshness(output)
 
-    return output
 
-
-def search_vector(query: str, k: int = 5, collection_name: str = "reg_support_desk"):
+def search_vector(
+    query: str, k: int = RETRIEVAL_K, collection_name: str = "reg_support_desk"
+):
     """performs Vector Search"""
     vector_store = get_vector_store(collection_name)
     docs = vector_store.similarity_search(query, k)
@@ -60,13 +66,14 @@ def search_vector(query: str, k: int = 5, collection_name: str = "reg_support_de
     ]
 
     # print(output)
-    return output
+    # return output
+    return _sort_by_freshness(output)
 
 
 def search_hybrid(
     semantic_query: str,
     search_terms: list[str],
-    k: int = 5,
+    k: int = RETRIEVAL_K,
     collection_name: str = "reg_support_desk",
 ):
     """Merge vector and fts results using RRF (Reciprocal Rank Fusion)
@@ -114,4 +121,17 @@ def search_hybrid(
     # doc will be ordered from higher rank to lower
     ranked = sorted(rrf_scores.items(), key=lambda x: x[1], reverse=True)
     print(ranked)
-    return [chunk_map[key] for key, _ in ranked[:k]]
+    documents = [chunk_map[key] for key, _ in ranked[:k]]
+    return _sort_by_freshness(documents)
+
+
+def _sort_by_freshness(documents: list[dict]) -> list[dict]:
+    """
+    Sort documents by last_updated (newest first)
+    and return only the top RETURN_K.
+    """
+    return sorted(
+        documents,
+        key=lambda doc: float(doc["metadata"].get("last_updated", 0)),
+        reverse=True,
+    )[:RETURN_K]
