@@ -61,3 +61,8 @@ class UserQueryResponse(BaseModel):
     analysis: QueryAnalysis
     retrieval: RetrievalResult
     query_response: QueryResponse
+
+
+class LLMAnswer(BaseModel):
+    answer: str
+    rule_summary: list[str]

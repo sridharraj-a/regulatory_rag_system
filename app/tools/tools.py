@@ -2,6 +2,7 @@ import psycopg
 import os
 from app.core.db import get_vector_store
 from psycopg.rows import dict_row
+from langsmith import traceable
 
 # PGVector connection string uses SQLAlchemy format: postgresql+psycopg://...
 # psycopg.connect needs standard format: postgresql://...
@@ -10,6 +11,7 @@ RETRIEVAL_K = 20
 RETURN_K = 5
 
 
+@traceable(name="FTS Search")
 def search_fts(
     query: str, k: int = RETRIEVAL_K, collection_name: str = "reg_support_desk"
 ):
@@ -50,6 +52,7 @@ def search_fts(
     return _sort_by_freshness(output)
 
 
+@traceable(name="Vector Search")
 def search_vector(
     query: str, k: int = RETRIEVAL_K, collection_name: str = "reg_support_desk"
 ):
@@ -70,6 +73,7 @@ def search_vector(
     return _sort_by_freshness(output)
 
 
+@traceable(name="Hybrid Search")
 def search_hybrid(
     semantic_query: str,
     search_terms: list[str],
@@ -81,7 +85,7 @@ def search_hybrid(
     The constant 60 prevents top-ranked outputs from dominating
     How RRF scores for a chunk = sum of 1/(rank + 60)
     """
-    print("Running Hybrid Search")
+    # print("Running Hybrid Search")
 
     vector_search_results = search_vector(
         semantic_query,
@@ -120,7 +124,7 @@ def search_hybrid(
     # this sorts the results of our RRF calculation so that, the higher scoring
     # doc will be ordered from higher rank to lower
     ranked = sorted(rrf_scores.items(), key=lambda x: x[1], reverse=True)
-    print(ranked)
+    # print(ranked)
     documents = [chunk_map[key] for key, _ in ranked[:k]]
     return _sort_by_freshness(documents)
 

@@ -4,6 +4,8 @@ from app.schema.query_response import (
     QueryResponse,
     RetrievalResult,
     UserQueryResponse,
+    Citation,
+    LLMAnswer,
 )
 
 from app.tools.tools import (
@@ -11,16 +13,17 @@ from app.tools.tools import (
     search_fts,
     search_hybrid,
 )
-
+import json
 from langchain_core.tools import tool
 from langchain.agents import create_agent
 from langchain_openai import ChatOpenAI
+from langsmith import traceable
 
 
 class RagAgent:
 
     def __init__(self):
-        self.llm = ChatOpenAI(model="gpt-4o-mini", temperature=0)
+        self.llm = ChatOpenAI(model="gpt-5.5", temperature=0)
 
         self.query_identification_agent = create_agent(
             model="openai:gpt-5.5",  # brain of the agent
@@ -63,24 +66,26 @@ class RagAgent:
             # model="openai:gpt-5.5",
             model=self.llm,  # brain of the agent
             tools=[],
-            response_format=QueryResponse,
+            response_format=LLMAnswer,
             system_prompt="""
             You are a Banking Regulatory Response Generator.
 
-            Answer only from the retrieved documents.
+            Answer only using the retrieved regulatory documents.
 
-            If multiple documents are provided:
-            - combine relevant information
-            - remove duplicates
-            - preserve regulatory meaning
+            Return:
 
-            If the answer is not found in the retrieved documents, return:
+            1. answer
+            - Provide a concise regulatory response.
 
-            "I could not find this information in the available regulatory documents."
+            2. rule_summary
+            - Extract key rules, limits or thresholds.
 
-            Do not use outside knowledge or make assumptions.
+            Do not generate citations.
+            Do not generate page numbers.
+            Do not generate confidence scores.
 
-            Return only JSON matching the QueryResponse schema.
+            Return only the structured response.
+
             """,
         )
 
@@ -97,13 +102,26 @@ class RagAgent:
 
         context = self.build_context(retrieval)
 
-        response = self.generate_answer(query, context, retrieval.retrieval_strategy)
+        llm_response = self.generate_answer(
+            query, context, retrieval.retrieval_strategy
+        )
+
+        citations = self.build_citations(retrieval.documents)
+
+        query_response = QueryResponse(
+            answer=llm_response.answer,
+            rule_summary=llm_response.rule_summary,
+            citations=citations,
+            confidence_score=0.95,
+        )
+
         return UserQueryResponse(
             analysis=analysis,
             retrieval=retrieval,
-            query_response=response,
+            query_response=query_response,
         )
 
+    @traceable(name="Identify Query Agent")
     def identify_query(self, query: str) -> QueryAnalysis:
 
         response = self.query_identification_agent.invoke(
@@ -156,6 +174,7 @@ class RagAgent:
 
         return context
 
+    @traceable(name="Answer Gen Agent")
     def generate_answer(self, query, context, strategy):
         answer = self.answer_generation_agent.invoke(
             {
@@ -172,3 +191,32 @@ class RagAgent:
             }
         )
         return answer["structured_response"]
+
+    def build_citations(self, documents: list[RetrievedDocument]):
+        seen = set()
+        citations = []
+
+        for doc in documents:
+
+            metadata = doc.metadata
+
+            key = (
+                metadata.get("source"),
+                metadata.get("page"),
+                metadata.get("section"),
+            )
+
+            if key in seen:
+                continue
+
+            seen.add(key)
+
+            citations.append(
+                Citation(
+                    source=metadata.get("source", "Unknown Source"),
+                    page=metadata.get("page", 0) + 1,
+                    section=metadata.get("section", ""),
+                    excerpt=doc.content[:250].strip(),
+                )
+            )
+        return citations

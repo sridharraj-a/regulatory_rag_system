@@ -12,6 +12,7 @@ Regulatory Compliance RAG Chatbot
 # uv add langchain_postgres
 # uv add fastapi 
 # uv add fastapi uvicorn
+# uv add langsmith
 # uv run uvicorn app.main:app --reload
 
 To access fastapi swagger end point use http://127.0.0.1:8000/docs
