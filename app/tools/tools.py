@@ -165,15 +165,16 @@ def search_hybrid(
 
 def _sort_by_freshness(documents: list[dict]) -> list[dict]:
     """
-    Rank primarily by retrieval relevance.
-    Prefer newer documents when relevance is close.
+    For regulatory FAQ documents:
+    1. Prefer latest updated document
+    2. Use retrieval score only within the same document version
     """
 
     return sorted(
         documents,
         key=lambda doc: (
-            float(doc.get("retrieval_score", 0)),
             float(doc["metadata"].get("last_updated", 0)),
+            float(doc.get("retrieval_score", 0)),
         ),
         reverse=True,
     )[:RETURN_K]
