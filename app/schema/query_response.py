@@ -47,7 +47,8 @@ class QueryResponse(BaseModel):
 class RetrievedDocument(BaseModel):
     content: str
     metadata: dict[str, Any]
-    fts_rank: float | None = None
+    retrieval_score: float | None = None
+    score_type: str | None = None
 
 
 class RetrievalResult(BaseModel):

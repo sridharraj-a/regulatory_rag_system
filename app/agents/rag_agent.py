@@ -112,7 +112,7 @@ class RagAgent:
             answer=llm_response.answer,
             rule_summary=llm_response.rule_summary,
             citations=citations,
-            confidence_score=0.95,
+            confidence_score=self.calculate_confidence(retrieval),
         )
 
         return UserQueryResponse(
@@ -220,3 +220,26 @@ class RagAgent:
                 )
             )
         return citations
+
+    def calculate_confidence(self, retrieval: RetrievalResult):
+
+        scores = [
+            doc.retrieval_score
+            for doc in retrieval.documents
+            if doc.retrieval_score is not None
+        ]
+
+        if not scores:
+            return 0.0
+
+        top_score = max(scores)
+
+        avg_score = sum(scores) / len(scores)
+
+        coverage = min(len(scores) / 5, 1)
+
+        confidence = 0.6 * top_score + 0.3 * avg_score + 0.1 * coverage
+
+        # compress extreme differences
+        confidence = 0.5 + (confidence * 0.5)
+        return round(confidence, 2)

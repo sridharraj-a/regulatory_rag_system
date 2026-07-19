@@ -38,17 +38,22 @@ def search_fts(
             cur.execute(sql, {"query": query, "collection": collection_name, "k": k})
             rows = cur.fetchall()
 
-    output = [
-        {
-            "content": row["content"],
-            "metadata": row["metadata"],
-            "fts_rank": round(float(row["fts_rank"]), 4),
-        }
-        for row in rows
-    ]
+    output = []
 
-    # print(output)
-    # return output
+    for row in rows:
+
+        raw_score = float(row["fts_rank"])
+
+        normalized_score = min(raw_score / 0.5, 1.0)
+
+        output.append(
+            {
+                "content": row["content"],
+                "metadata": row["metadata"],
+                "retrieval_score": round(normalized_score, 4),
+                "score_type": "FTS",
+            }
+        )
     return _sort_by_freshness(output)
 
 
@@ -58,15 +63,20 @@ def search_vector(
 ):
     """performs Vector Search"""
     vector_store = get_vector_store(collection_name)
-    docs = vector_store.similarity_search(query, k)
+    docs = vector_store.similarity_search_with_score(query, k)
 
-    output = [
-        {
-            "content": doc.page_content,
-            "metadata": doc.metadata,
-        }
-        for doc in docs
-    ]
+    output = []
+
+    for doc, distance in docs:
+        similarity = 1 - float(distance)
+        output.append(
+            {
+                "content": doc.page_content,
+                "metadata": doc.metadata,
+                "retrieval_score": round(similarity, 4),
+                "score_type": "VECTOR",
+            }
+        )
 
     # print(output)
     # return output
@@ -125,17 +135,45 @@ def search_hybrid(
     # doc will be ordered from higher rank to lower
     ranked = sorted(rrf_scores.items(), key=lambda x: x[1], reverse=True)
     # print(ranked)
-    documents = [chunk_map[key] for key, _ in ranked[:k]]
+    # Extract RRF values
+    rrf_values = [score for _, score in ranked[:k]]
+
+    max_rrf = max(rrf_values)
+    min_rrf = min(rrf_values)
+
+    documents = []
+
+    for key, score in ranked[:k]:
+
+        if max_rrf == min_rrf:
+            normalized_score = 1.0
+
+        else:
+            normalized_score = (score - min_rrf) / (max_rrf - min_rrf)
+
+        documents.append(
+            {
+                "content": chunk_map[key]["content"],
+                "metadata": chunk_map[key]["metadata"],
+                "retrieval_score": round(normalized_score, 4),
+                "score_type": "HYBRID",
+            }
+        )
+    # documents = [chunk_map[key] for key, _ in ranked[:k]]
     return _sort_by_freshness(documents)
 
 
 def _sort_by_freshness(documents: list[dict]) -> list[dict]:
     """
-    Sort documents by last_updated (newest first)
-    and return only the top RETURN_K.
+    Rank primarily by retrieval relevance.
+    Prefer newer documents when relevance is close.
     """
+
     return sorted(
         documents,
-        key=lambda doc: float(doc["metadata"].get("last_updated", 0)),
+        key=lambda doc: (
+            float(doc.get("retrieval_score", 0)),
+            float(doc["metadata"].get("last_updated", 0)),
+        ),
         reverse=True,
     )[:RETURN_K]
