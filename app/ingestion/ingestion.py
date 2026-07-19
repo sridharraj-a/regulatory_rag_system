@@ -17,46 +17,21 @@ import tiktoken
 import re
 import os
 
-
 load_dotenv()
-
-
-def clean_text(text):
-
-    text = text.replace("\r", " ")
-
-    # Replace multiple newlines with one
-    text = re.sub(r"\n{2,}", "\n", text)
-
-    # Replace tabs
-    text = re.sub(r"\t", " ", text)
-
-    # Replace multiple spaces
-    text = re.sub(r" +", " ", text)
-
-    # Join wrapped lines
-    text = re.sub(r"(?<!\n)\n(?!\n)", " ", text)
-
-    return text.strip()
-
 
 
 def ingest_pdf(file_path):
 
     print("Ingestion Started")
 
-
     # 1. Load PDF file
     loader = PyPDFLoader(file_path)
 
     docs = loader.load()
 
-
     # 2. Clean PDF extracted text
     for doc in docs:
         doc.page_content = clean_text(doc.page_content)
-
-
 
     # 3. Metadata enrichment (for citation)
     for doc in docs:
@@ -69,48 +44,53 @@ def ingest_pdf(file_path):
             }
         )
 
-
     print("Before Chunking")
 
-
     splitter = RecursiveCharacterTextSplitter(
-            chunk_size=512,
-            chunk_overlap=100,
-            length_function=token_length,
-            separators=["\n\n", "\n", "Q", "Source:", " ", ""],
-        )
- 
+        chunk_size=512,
+        chunk_overlap=100,
+        length_function=token_length,
+        separators=["\n\n", "\n", "Q", "Source:", " ", ""],
+    )
+
     chunks = splitter.split_documents(docs)
     print("Total Chunks")
     print(docs[0].page_content)
     print(len(chunks))
 
-
-
     # 5. Generate embeddings
     # 6. Save embeddings into PGVector database
 
-    vector_store = get_vector_store(
-        collection_name="reg_support_desk"
-    )
-
+    vector_store = get_vector_store(collection_name="reg_support_desk")
 
     vector_store.add_documents(chunks)
 
-
     print("Ingestion Completed")
- 
+
+
+def clean_text(text: str) -> str:
+    # Remove repeated whitespace/newlines
+    text = re.sub(r"\s+", " ", text)
+
+    # Remove spaces before punctuation
+    text = re.sub(r"\s+([.,;:!?])", r"\1", text)
+
+    # Remove markdown separators
+    text = re.sub(r"-{3,}", " ", text)
+
+    # Remove duplicate spaces again
+    text = re.sub(r" {2,}", " ", text)
+
+    return text.strip()
+
 
 encoding = tiktoken.get_encoding("cl100k_base")
+
 
 def token_length(text: str) -> int:
     return len(encoding.encode(text))
 
 
-
 if __name__ == "__main__":
-    
 
-    ingest_pdf(
-        "data/Capstone_Project_1_Regulatory_Compliance_System_FAQ.pdf"
-    )
+    ingest_pdf("app\data\Capstone_Project_1_Regulatory_Compliance_System_FAQ.pdf")

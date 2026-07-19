@@ -13,7 +13,7 @@ from app.tools.tools import (
     search_fts,
     search_hybrid,
 )
-import json
+
 from langchain_core.tools import tool
 from langchain.agents import create_agent
 from langchain_openai import ChatOpenAI
