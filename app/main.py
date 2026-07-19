@@ -2,7 +2,7 @@ from fastapi import FastAPI
 
 from app.routes.query_routes import router as query_router
 
-from app.upload_routes import router as upload_router
+from app.routes.upload_routes import router as upload_router
 
 
 
@@ -21,9 +21,7 @@ def home():
 
 app.include_router(query_router)
 
-app.include_router(
-    upload_router
-)
+app.include_router(upload_router)
 
 
 

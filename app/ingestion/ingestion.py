@@ -11,7 +11,8 @@
 from dotenv import load_dotenv
 from langchain_community.document_loaders import PyPDFLoader
 from langchain_text_splitters import RecursiveCharacterTextSplitter
-from core.db import get_vector_store
+from app.core.db import get_vector_store
+import tiktoken
 
 import re
 import os
@@ -72,17 +73,16 @@ def ingest_pdf(file_path):
     print("Before Chunking")
 
 
-    # 4. Chunking strategy
     splitter = RecursiveCharacterTextSplitter(
-        chunk_size=1000,
-        chunk_overlap=200,
-    )
-
-
+            chunk_size=512,
+            chunk_overlap=100,
+            length_function=token_length,
+            separators=["\n\n", "\n", "Q", "Source:", " ", ""],
+        )
+ 
     chunks = splitter.split_documents(docs)
-
-
     print("Total Chunks")
+    print(docs[0].page_content)
     print(len(chunks))
 
 
@@ -91,7 +91,7 @@ def ingest_pdf(file_path):
     # 6. Save embeddings into PGVector database
 
     vector_store = get_vector_store(
-        collection_name="regulatory_compliance"
+        collection_name="reg_support_desk"
     )
 
 
@@ -99,10 +99,17 @@ def ingest_pdf(file_path):
 
 
     print("Ingestion Completed")
+ 
+
+encoding = tiktoken.get_encoding("cl100k_base")
+
+def token_length(text: str) -> int:
+    return len(encoding.encode(text))
 
 
 
 if __name__ == "__main__":
+    
 
     ingest_pdf(
         "data/Capstone_Project_1_Regulatory_Compliance_System_FAQ.pdf"

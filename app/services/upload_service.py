@@ -1,7 +1,7 @@
 import os
 import shutil
 
-from ingestion.ingestion import ingest_pdf
+from app.ingestion.ingestion import ingest_pdf
 
 
 UPLOAD_FOLDER = "data"
