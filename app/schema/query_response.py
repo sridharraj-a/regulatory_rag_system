@@ -53,13 +53,13 @@ class RetrievedDocument(BaseModel):
 
 class RetrievalResult(BaseModel):
     retrieval_strategy: str
-    semantic_query: str
-    search_terms: list[str]
+    #    semantic_query: str
+    #    search_terms: list[str]
     documents: list[RetrievedDocument]
 
 
 class UserQueryResponse(BaseModel):
-    analysis: QueryAnalysis
+    #    analysis: QueryAnalysis
     retrieval: RetrievalResult
     query_response: QueryResponse
 

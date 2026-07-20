@@ -18,6 +18,10 @@ from langchain_core.tools import tool
 from langchain.agents import create_agent
 from langchain_openai import ChatOpenAI
 from langsmith import traceable
+import json
+from langchain_core.messages import ToolMessage
+
+# from pprint import pprint
 
 
 class RagAgent:
@@ -25,86 +29,184 @@ class RagAgent:
     def __init__(self):
         self.llm = ChatOpenAI(model="gpt-5.5", temperature=0)
 
-        self.query_identification_agent = create_agent(
-            model="openai:gpt-5.5",  # brain of the agent
-            # model=self.llm,  # brain of the agent
-            tools=[],
-            response_format=QueryAnalysis,
-            system_prompt="""
-            You are the Retrieval Planner for a Banking Regulatory Knowledge Base.
+        self.regulatory_agent = create_agent(
+            model=self.llm,
+            tools=[
+                search_vector,
+                search_fts,
+                search_hybrid,
+            ],
+            response_format=LLMAnswer,
+            system_prompt="""You are a Banking Regulatory FAQ Assistant.
 
-            Your only task is to prepare a user's query for retrieval.
+            Your purpose is to provide a concise and accurate answer user questions 
+            using only the available regulatory documents in a direct manner.
 
-            For each query produce:
+            Your workflow is fixed and must be followed exactly.
 
-            1. semantic_query
-            - Rewrite the question for semantic retrieval.
-            - Preserve intent and regulatory meaning.
-            - Expand abbreviations only when helpful.
+            ========================
+            STEP 1 - Analyze Query
+            ========================
 
-            2. search_terms
-            Extract exact searchable terms including:
+            Analyze the user's question to determine the most appropriate retrieval strategy.
+
+            If the user's question is unrelated to banking or banking regulations:
+
+            - Do not call any retrieval tool.
+            - Respond directly with the structured response.
+            - Leave retrieval empty.
+
+            Choose exactly ONE retrieval tool.
+
+            Use:
+
+            • search_vector
+            For conceptual questions requiring explanation, comparison, summaries, intent or meaning.
+
+            Examples:
+            - What is Tier 1 Capital?
+            - Explain KYC requirements.
+            - Difference between CRR and SLR.
+
+            • search_fts
+            For questions containing exact searchable identifiers such as:
+
             - regulatory acronyms
-            - regulation, framework and Act names
-            - circular, section or clause numbers
+            - regulation names
+            - framework names
+            - Act names
+            - circular numbers
+            - section numbers
+            - clause numbers
             - dates
             - percentages
             - monetary values
             - proper nouns
 
-            3. strategy
-            Choose one:
-            - VECTOR: conceptual questions (what, why, how, explanation, comparison, summary)
-            - FTS: exact identifiers (acronyms, regulation names, circulars, sections, dates, percentages)
-            - HYBRID: contains both conceptual language and exact identifiers.
+            Examples:
+            - RBI Circular DOR.CRE.REC.28/...
+            - Section 35A
+            - 9% CRAR
 
-            Return only JSON matching the QueryAnalysis schema.""",
-            # roles and goals
-        )
+            • search_hybrid
+            When the question contains both conceptual language and exact identifiers.
 
-        self.answer_generation_agent = create_agent(
-            # model="openai:gpt-5.5",
-            model=self.llm,  # brain of the agent
-            tools=[],
-            response_format=LLMAnswer,
-            system_prompt="""
-            You are a Banking Regulatory Response Generator.
+            Example:
+            Explain the provisioning requirements under RBI Circular XXX.
 
-            Answer only using the retrieved regulatory documents.
+            ========================
+            STEP 2 - Retrieval
+            ========================
 
-            Return:
+            Call exactly ONE retrieval tool.
 
-            1. answer
-            - Provide a concise regulatory response.
+            Never call more than one tool.
 
-            2. rule_summary
-            - Extract key rules, limits or thresholds.
+            Never retry another retrieval tool.
 
-            Do not generate citations.
-            Do not generate page numbers.
-            Do not generate confidence scores.
+            Never compare multiple retrieval results.
+
+            Never call another retrieval tool after one has returned results.
+
+            ========================
+            STEP 3 - Generate Answer
+            ========================
+
+            Read the retrieved documents.
+
+            Generate the answer ONLY from the retrieved content.
+
+            Do not use external knowledge.
+
+            Do not infer.
+
+            Do not speculate.
+
+            Do not complete missing information.
+
+            If the answer is not present in the retrieved documents, respond exactly:
+
+            "I could not find this information in the available regulatory documents."
+
+            Answer uses the minimum number of words necessary to convey the complete answer.
+
+            Answer should omit pleasantries, hedging language, and unnecessary context.
+
+            Answer should exclude meta-commentary about the answer or the model's capabilities.
+
+            Answer should not include explanations unless explicitly requested.
+
+            ========================
+            Response
+            ========================
 
             Return only the structured response.
 
-            """,
+            The answer should be concise and only contain the requested info.
+            
+            rule_summary
+            - extract important regulatory rules
+            - thresholds
+            - limits
+            - conditions
+            - obligations
+
+            Do NOT generate:
+
+            - citations
+            - page numbers
+            - confidence scores
+            - document names
+            - source references
+
+            These are generated by the application.""",
         )
 
     def invoke(self, query: str):
 
         llm = ChatOpenAI(
-            model="gpt-4o-mini",
+            model="gpt-5.5",
             temperature=0,
         )
 
-        analysis = self.identify_query(query)
-
-        retrieval = self.retrieve_documents(analysis)
-
-        context = self.build_context(retrieval)
-
-        llm_response = self.generate_answer(
-            query, context, retrieval.retrieval_strategy
+        result = self.regulatory_agent.invoke(
+            {
+                "messages": [
+                    {
+                        "role": "user",
+                        "content": query,
+                    }
+                ]
+            }
         )
+        # pprint(result)
+        llm_response = result["structured_response"]
+
+        tool_messages = [
+            message
+            for message in result["messages"]
+            if isinstance(message, ToolMessage)
+        ]
+
+        if len(tool_messages) == 0:
+            # Agent intentionally chose not to retrieve
+            retrieval = RetrievalResult(retrieval_strategy="NONE", documents=[])
+
+        elif len(tool_messages) == 1:
+            tool_output = json.loads(tool_messages[0].content)
+
+            retrieval = RetrievalResult(
+                retrieval_strategy=tool_messages[0].name,
+                documents=[
+                    RetrievedDocument.model_validate(doc)
+                    for doc in tool_output["documents"]
+                ],
+            )
+
+        else:
+            raise RuntimeError(
+                f"Expected at most one retrieval tool call, found {len(tool_messages)}."
+            )
 
         citations = self.build_citations(retrieval.documents)
 
@@ -116,81 +218,9 @@ class RagAgent:
         )
 
         return UserQueryResponse(
-            analysis=analysis,
             retrieval=retrieval,
             query_response=query_response,
         )
-
-    @traceable(name="Identify Query Agent")
-    def identify_query(self, query: str) -> QueryAnalysis:
-
-        response = self.query_identification_agent.invoke(
-            {"messages": [{"role": "user", "content": query}]}
-        )
-
-        return response["structured_response"]
-
-    def retrieve_documents(self, analysis: QueryAnalysis) -> RetrievalResult:
-        """
-        Execute the appropriate retrieval strategy and
-        return the retrieved documents.
-        """
-
-        strategy = analysis.retrieval_strategy
-
-        if strategy == "VECTOR":
-            docs = search_vector(analysis.semantic_query)
-
-        elif strategy == "FTS":
-            docs = search_fts(" ".join(analysis.search_terms))
-
-        elif strategy == "HYBRID":
-            docs = search_hybrid(
-                analysis.semantic_query,
-                analysis.search_terms,
-            )
-
-        else:
-            raise ValueError(f"Unknown retrieval strategy: {strategy}")
-
-        return RetrievalResult(
-            retrieval_strategy=strategy,
-            semantic_query=analysis.semantic_query,
-            search_terms=analysis.search_terms,
-            documents=[RetrievedDocument(**doc) for doc in docs],
-        )
-
-    def build_context(self, result: RetrievalResult):
-
-        context = ""
-
-        for i, doc in enumerate(result.documents, start=1):
-
-            context += f"""
-            Document {i}
-            Content: {doc.content}
-            Metadata:{doc.metadata}
-            """
-
-        return context
-
-    @traceable(name="Answer Gen Agent")
-    def generate_answer(self, query, context, strategy):
-        answer = self.answer_generation_agent.invoke(
-            {
-                "messages": [
-                    {
-                        "role": "user",
-                        "content": f"""
-        User Question :  {query}
-        Retrieved Documents : {context}
-        Retrieval Strategy : {strategy} 
-        """,
-                    }
-                ]
-            }
-        )
-        return answer["structured_response"]
 
     def build_citations(self, documents: list[RetrievedDocument]):
         seen = set()

@@ -15,13 +15,6 @@ def main():
     print(query)
 
     print("\n==============================")
-    print("QUERY ANALYSIS")
-    print("==============================")
-    print(f"Strategy      : {result.analysis.retrieval_strategy}")
-    print(f"Semantic Query: {result.analysis.semantic_query}")
-    print(f"Search Terms  : {', '.join(result.analysis.search_terms)}")
-
-    print("\n==============================")
     print("RETRIEVED DOCUMENTS")
     print("==============================")
 
@@ -30,25 +23,33 @@ def main():
         print(f"\nDocument {i}")
         print(f"Source    : {doc.metadata.get('source')}")
         print(f"Metadata  : {doc.metadata}")
+        print(f"Score     : {doc.retrieval_score}")
+        print(f"Type      : {doc.score_type}")
         print(f"Content   : {doc.content[:300]}")
 
     print("\n==============================")
     print("FINAL ANSWER")
     print("==============================")
 
-    print(result.response.answer)
+    print(result.query_response.answer)
 
     print("\nRule Summary")
-    print(result.response.rule_summary)
+
+    for rule in result.query_response.rule_summary:
+        print(f"- {rule}")
 
     print("\nCitations")
 
-    for citation in result.response.citations:
-        print(f"- {citation}")
+    for citation in result.query_response.citations:
+        print(f"- Source : {citation.source}")
+        print(f"  Page   : {citation.page}")
+        print(f"  Section: {citation.section}")
+        print(f"  Text   : {citation.excerpt}")
+        print()
 
     print("\nConfidence")
 
-    print(result.response.confidence_score)
+    print(result.query_response.confidence_score)
 
 
 if __name__ == "__main__":

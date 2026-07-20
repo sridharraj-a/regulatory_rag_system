@@ -1,21 +1,30 @@
 import psycopg
 import os
+from langchain_core.tools import tool
 from app.core.db import get_vector_store
 from psycopg.rows import dict_row
-from langsmith import traceable
+
+# from langsmith import traceable
 
 # PGVector connection string uses SQLAlchemy format: postgresql+psycopg://...
 # psycopg.connect needs standard format: postgresql://...
 _raw_conn = os.getenv("PG_CONNECTION_STRING_FTS")
-RETRIEVAL_K = 20
+RETRIEVAL_K = 5
 RETURN_K = 5
 
 
-@traceable(name="FTS Search")
-def search_fts(
+# @traceable(name="FTS Search")
+def _search_fts(
     query: str, k: int = RETRIEVAL_K, collection_name: str = "reg_support_desk"
 ):
-    """Keyword search against the stored chunks using Postgres' tsvector/tsquery/ts_rank"""
+    """
+    Use ONLY for exact regulatory terminology,
+    circular names,
+    abbreviations,
+    percentages,
+    section numbers,
+    clauses.
+    """
     sql = """
        SELECT
            e.document                                               AS content,
@@ -54,14 +63,20 @@ def search_fts(
                 "score_type": "FTS",
             }
         )
-    return _sort_by_freshness(output)
+    return {"documents": _sort_by_freshness(output)}
 
 
-@traceable(name="Vector Search")
-def search_vector(
+search_fts = tool(_search_fts)
+
+
+# @traceable(name="Vector Search")
+def _search_vector(
     query: str, k: int = RETRIEVAL_K, collection_name: str = "reg_support_desk"
 ):
-    """performs Vector Search"""
+    """
+    Use ONLY for semantic or conceptual questions (what, why, how, explanation, comparison, summary).
+    Never use if the question contains specific regulatory terms,
+    numbers, clauses or abbreviations."""
     vector_store = get_vector_store(collection_name)
     docs = vector_store.similarity_search_with_score(query, k)
 
@@ -80,34 +95,36 @@ def search_vector(
 
     # print(output)
     # return output
-    return _sort_by_freshness(output)
+    return {"documents": _sort_by_freshness(output)}
 
 
-@traceable(name="Hybrid Search")
-def search_hybrid(
+search_vector = tool(_search_vector)
+
+
+# @traceable(name="Hybrid Search")
+def _search_hybrid(
     semantic_query: str,
     search_terms: list[str],
     k: int = RETRIEVAL_K,
     collection_name: str = "reg_support_desk",
 ):
-    """Merge vector and fts results using RRF (Reciprocal Rank Fusion)
-    Chunks appearing in both search results will rank higher than those in only one
-    The constant 60 prevents top-ranked outputs from dominating
-    How RRF scores for a chunk = sum of 1/(rank + 60)
+    """
+    Use ONLY when the query contains both
+    conceptual language and exact regulatory terminology.
     """
     # print("Running Hybrid Search")
 
-    vector_search_results = search_vector(
+    vector_search_results = _search_vector(
         semantic_query,
         k,
         collection_name,
-    )
+    )["documents"]
 
-    fts_results = search_fts(
+    fts_results = _search_fts(
         " ".join(search_terms),
         k,
         collection_name,
-    )
+    )["documents"]
 
     rrf_scores: dict[str, float] = {}
     chunk_map: dict[str, dict] = {}
@@ -160,7 +177,10 @@ def search_hybrid(
             }
         )
     # documents = [chunk_map[key] for key, _ in ranked[:k]]
-    return _sort_by_freshness(documents)
+    return {"documents": _sort_by_freshness(documents)}
+
+
+search_hybrid = tool(_search_hybrid)
 
 
 def _sort_by_freshness(documents: list[dict]) -> list[dict]:
