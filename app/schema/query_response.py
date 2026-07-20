@@ -36,6 +36,10 @@ class QueryResponse(BaseModel):
     citations: List[Citation]
     rule_summary: List[str]
     confidence_score: float = Field(ge=0.0, le=1.0)
+    disclaimer: str
+
+
+#  langsmith_trace_id: str | None = None
 
 
 #

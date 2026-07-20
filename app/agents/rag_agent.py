@@ -215,6 +215,13 @@ class RagAgent:
             rule_summary=llm_response.rule_summary,
             citations=citations,
             confidence_score=self.calculate_confidence(retrieval),
+            disclaimer=(
+                "This response is generated from the retrieved regulatory documents "
+                "and is intended for informational purposes only. It should not be "
+                "considered legal, regulatory, or compliance advice. Always refer to "
+                "the official regulator publications before making compliance decisions."
+            ),
+            # langsmith_trace_id=trace_id,
         )
 
         return UserQueryResponse(

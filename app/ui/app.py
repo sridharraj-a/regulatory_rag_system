@@ -1,7 +1,7 @@
 import requests
 import streamlit as st
 
-API_URL = "http://127.0.0.1:8000/query"
+API_URL = "http://127.0.0.1:8000/api/v1/query"
 
 st.set_page_config(page_title="Regulatory RAG Assistant", page_icon="🏦", layout="wide")
 
@@ -56,6 +56,9 @@ for message in st.session_state.messages:
                     st.info(citation["excerpt"])
 
                     st.divider()
+            with st.expander("⚠️ Regulatory Disclaimer"):
+
+                st.info(message["disclaimer"])
 
 
 # ---------------------------------------------------
@@ -118,6 +121,9 @@ if prompt:
                 st.info(citation["excerpt"])
 
                 st.divider()
+        with st.expander("⚠️ Regulatory Disclaimer"):
+
+            st.info(result["disclaimer"])
 
     # Save assistant response
     st.session_state.messages.append(
@@ -127,5 +133,6 @@ if prompt:
             "rule_summary": result["rule_summary"],
             "confidence_score": result["confidence_score"],
             "citations": result["citations"],
+            "disclaimer": result["disclaimer"],
         }
     )
