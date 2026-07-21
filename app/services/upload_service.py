@@ -1,39 +1,110 @@
 import os
 import shutil
 
+from fastapi import HTTPException, UploadFile
+
+from app.core.logger import logger
 from app.ingestion.ingestion import ingest_pdf
 
-UPLOAD_FOLDER = "app\data"
+UPLOAD_FOLDER = os.path.join("app", "data")
+
+ALLOWED_EXTENSIONS = {".pdf"}
 
 
-def save_uploaded_file(file):
+def save_uploaded_file(file: UploadFile) -> str:
+    """
+    Save uploaded PDF into the data folder.
+    """
 
-    os.makedirs(UPLOAD_FOLDER, exist_ok=True)
+    try:
+        os.makedirs(UPLOAD_FOLDER, exist_ok=True)
 
-    file_path = os.path.join(UPLOAD_FOLDER, file.filename)
+        file_path = os.path.join(
+            UPLOAD_FOLDER,
+            file.filename,
+        )
 
-    print("Saving file:", file_path)
+        # Optional: Prevent duplicate uploads
+        if os.path.exists(file_path):
+            raise HTTPException(
+                status_code=409,
+                detail="File already exists."
+            )
 
-    with open(file_path, "wb") as buffer:
-        shutil.copyfileobj(file.file, buffer)
+        logger.info("Saving file: %s", file_path)
 
-    print("File saved successfully")
+        with open(file_path, "wb") as buffer:
+            shutil.copyfileobj(file.file, buffer)
 
-    return file_path
+        logger.info("File saved successfully.")
+
+        return file_path
+
+    except HTTPException:
+        raise
+
+    except Exception as e:
+        logger.exception("Error while saving uploaded file.")
+
+        raise RuntimeError(
+            f"Unable to save uploaded file: {str(e)}"
+        ) from e
 
 
-def process_upload(file):
+def process_upload(file: UploadFile):
+    """
+    Save uploaded PDF and start ingestion.
+    """
 
-    print("Upload started")
+    try:
 
-    # 1. Save file
-    file_path = save_uploaded_file(file)
+        logger.info("========== FILE UPLOAD STARTED ==========")
 
-    print("Starting ingestion")
+        if file is None:
+            raise HTTPException(
+                status_code=400,
+                detail="No file uploaded."
+            )
 
-    # 2. Run ingestion pipeline
-    ingest_pdf(file_path)
+        if not file.filename:
+            raise HTTPException(
+                status_code=400,
+                detail="Filename is missing."
+            )
 
-    print("Ingestion completed")
+        extension = os.path.splitext(file.filename)[1].lower()
 
-    return {"message": "File uploaded and indexed successfully", "file": file.filename}
+        if extension not in ALLOWED_EXTENSIONS:
+            raise HTTPException(
+                status_code=400,
+                detail="Only PDF files are supported."
+            )
+
+        logger.info("Uploading file: %s", file.filename)
+
+        file_path = save_uploaded_file(file)
+
+        logger.info("Starting ingestion...")
+
+        ingest_pdf(file_path)
+
+        logger.info("Ingestion completed successfully.")
+
+        return {
+            "status": "success",
+            "message": "File uploaded and indexed successfully.",
+            "file_name": file.filename,
+            "location": file_path,
+        }
+
+    except HTTPException:
+        raise
+
+    except Exception as e:
+
+        logger.exception("Upload failed.")
+
+        raise HTTPException(
+            status_code=500,
+            detail=f"Upload failed: {str(e)}"
+        ) from e

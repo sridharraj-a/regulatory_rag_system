@@ -1,33 +1,33 @@
+import json
+
+from langchain.agents import create_agent
+from langchain_core.messages import ToolMessage
+from langchain_openai import ChatOpenAI
+
+from app.core.logger import logger
 from app.schema.query_response import (
-    QueryAnalysis,
-    RetrievedDocument,
-    QueryResponse,
-    RetrievalResult,
-    UserQueryResponse,
     Citation,
     LLMAnswer,
+    QueryResponse,
+    RetrievalResult,
+    RetrievedDocument,
+    UserQueryResponse,
 )
-
 from app.tools.tools import (
-    search_vector,
     search_fts,
     search_hybrid,
+    search_vector,
 )
-
-from langchain_core.tools import tool
-from langchain.agents import create_agent
-from langchain_openai import ChatOpenAI
-from langsmith import traceable
-import json
-from langchain_core.messages import ToolMessage
-
-# from pprint import pprint
 
 
 class RagAgent:
 
     def __init__(self):
-        self.llm = ChatOpenAI(model="gpt-5.5", temperature=0)
+
+        self.llm = ChatOpenAI(
+            model="gpt-5.5",
+            temperature=0,
+        )
 
         self.regulatory_agent = create_agent(
             model=self.llm,
@@ -39,197 +39,158 @@ class RagAgent:
             response_format=LLMAnswer,
             system_prompt="""You are a Banking Regulatory FAQ Assistant.
 
-            Your purpose is to provide a concise and accurate answer user questions 
-            using only the available regulatory documents in a direct manner.
+Your purpose is to provide a concise and accurate answer user questions
+using only the available regulatory documents in a direct manner.
 
-            Your workflow is fixed and must be followed exactly.
+Your workflow is fixed and must be followed exactly.
 
-            ========================
-            STEP 1 - Analyze Query
-            ========================
+=========================
+STEP 1 - Analyze Query
+=========================
 
-            Analyze the user's question to determine the most appropriate retrieval strategy.
+Analyze the user's question to determine the most appropriate retrieval strategy.
 
-            If the user's question is unrelated to banking or banking regulations:
+If the user's question is unrelated to banking or banking regulations:
 
-            - Do not call any retrieval tool.
-            - Respond directly with the structured response.
-            - Leave retrieval empty.
+- Do not call any retrieval tool.
+- Respond directly with the structured response.
+- Leave retrieval empty.
 
-            Choose exactly ONE retrieval tool.
+Choose exactly ONE retrieval tool.
 
-            Use:
+Use:
 
-            • search_vector
-            For conceptual questions requiring explanation, comparison, summaries, intent or meaning.
+• search_vector
+For conceptual questions requiring explanation, comparison, summaries, intent or meaning.
 
-            Examples:
-            - What is Tier 1 Capital?
-            - Explain KYC requirements.
-            - Difference between CRR and SLR.
+• search_fts
+For questions containing exact searchable identifiers.
 
-            • search_fts
-            For questions containing exact searchable identifiers such as:
+• search_hybrid
+When the question contains both conceptual language and exact identifiers.
 
-            - regulatory acronyms
-            - regulation names
-            - framework names
-            - Act names
-            - circular numbers
-            - section numbers
-            - clause numbers
-            - dates
-            - percentages
-            - monetary values
-            - proper nouns
+=========================
+STEP 2 - Retrieval
+=========================
 
-            Examples:
-            - RBI Circular DOR.CRE.REC.28/...
-            - Section 35A
-            - 9% CRAR
+Call exactly ONE retrieval tool.
 
-            • search_hybrid
-            When the question contains both conceptual language and exact identifiers.
+Never call more than one tool.
 
-            Example:
-            Explain the provisioning requirements under RBI Circular XXX.
+=========================
+STEP 3 - Generate Answer
+=========================
 
-            ========================
-            STEP 2 - Retrieval
-            ========================
+Generate the answer ONLY from the retrieved content.
 
-            Call exactly ONE retrieval tool.
+Do not use external knowledge.
 
-            Never call more than one tool.
+If the answer is not present in the retrieved documents, respond exactly:
 
-            Never retry another retrieval tool.
+"I could not find this information in the available regulatory documents."
 
-            Never compare multiple retrieval results.
-
-            Never call another retrieval tool after one has returned results.
-
-            ========================
-            STEP 3 - Generate Answer
-            ========================
-
-            Read the retrieved documents.
-
-            Generate the answer ONLY from the retrieved content.
-
-            Do not use external knowledge.
-
-            Do not infer.
-
-            Do not speculate.
-
-            Do not complete missing information.
-
-            If the answer is not present in the retrieved documents, respond exactly:
-
-            "I could not find this information in the available regulatory documents."
-
-            Answer uses the minimum number of words necessary to convey the complete answer.
-
-            Answer should omit pleasantries, hedging language, and unnecessary context.
-
-            Answer should exclude meta-commentary about the answer or the model's capabilities.
-
-            Answer should not include explanations unless explicitly requested.
-
-            ========================
-            Response
-            ========================
-
-            Return only the structured response.
-
-            The answer should be concise and only contain the requested info.
-            
-            rule_summary
-            - extract important regulatory rules
-            - thresholds
-            - limits
-            - conditions
-            - obligations
-
-            Do NOT generate:
-
-            - citations
-            - page numbers
-            - confidence scores
-            - document names
-            - source references
-
-            These are generated by the application.""",
+Return only the structured response.
+""",
         )
 
     def invoke(self, query: str):
 
-        llm = ChatOpenAI(
-            model="gpt-5.5",
-            temperature=0,
-        )
+        try:
 
-        result = self.regulatory_agent.invoke(
-            {
-                "messages": [
-                    {
-                        "role": "user",
-                        "content": query,
-                    }
-                ]
-            }
-        )
-        # pprint(result)
-        llm_response = result["structured_response"]
+            logger.info("========== RAG AGENT STARTED ==========")
+            logger.info("Processing query: %s", query)
 
-        tool_messages = [
-            message
-            for message in result["messages"]
-            if isinstance(message, ToolMessage)
-        ]
-
-        if len(tool_messages) == 0:
-            # Agent intentionally chose not to retrieve
-            retrieval = RetrievalResult(retrieval_strategy="NONE", documents=[])
-
-        elif len(tool_messages) == 1:
-            tool_output = json.loads(tool_messages[0].content)
-
-            retrieval = RetrievalResult(
-                retrieval_strategy=tool_messages[0].name,
-                documents=[
-                    RetrievedDocument.model_validate(doc)
-                    for doc in tool_output["documents"]
-                ],
+            result = self.regulatory_agent.invoke(
+                {
+                    "messages": [
+                        {
+                            "role": "user",
+                            "content": query,
+                        }
+                    ]
+                }
             )
 
-        else:
+            logger.info("Agent invoked successfully.")
+
+            llm_response = result["structured_response"]
+
+            tool_messages = [
+                message
+                for message in result["messages"]
+                if isinstance(message, ToolMessage)
+            ]
+
+            if len(tool_messages) == 0:
+
+                logger.info("No retrieval tool selected.")
+
+                retrieval = RetrievalResult(
+                    retrieval_strategy="NONE",
+                    documents=[],
+                )
+
+            elif len(tool_messages) == 1:
+
+                logger.info(
+                    "Retrieval strategy: %s",
+                    tool_messages[0].name,
+                )
+
+                tool_output = json.loads(tool_messages[0].content)
+
+                retrieval = RetrievalResult(
+                    retrieval_strategy=tool_messages[0].name,
+                    documents=[
+                        RetrievedDocument.model_validate(doc)
+                        for doc in tool_output["documents"]
+                    ],
+                )
+
+            else:
+
+                raise RuntimeError(
+                    f"Expected at most one retrieval tool call, found {len(tool_messages)}."
+                )
+
+            citations = self.build_citations(
+                retrieval.documents
+            )
+
+            query_response = QueryResponse(
+                answer=llm_response.answer,
+                rule_summary=llm_response.rule_summary,
+                citations=citations,
+                confidence_score=self.calculate_confidence(
+                    retrieval
+                ),
+                disclaimer=(
+                    "This response is generated from the retrieved regulatory documents "
+                    "and is intended for informational purposes only. "
+                    "It should not be considered legal, regulatory, or compliance advice. "
+                    "Always refer to official regulator publications before making compliance decisions."
+                ),
+            )
+
+            logger.info("========== RAG AGENT COMPLETED ==========")
+
+            return UserQueryResponse(
+                retrieval=retrieval,
+                query_response=query_response,
+            )
+
+        except Exception as e:
+
+            logger.exception("RAG Agent execution failed.")
+
             raise RuntimeError(
-                f"Expected at most one retrieval tool call, found {len(tool_messages)}."
-            )
-
-        citations = self.build_citations(retrieval.documents)
-
-        query_response = QueryResponse(
-            answer=llm_response.answer,
-            rule_summary=llm_response.rule_summary,
-            citations=citations,
-            confidence_score=self.calculate_confidence(retrieval),
-            disclaimer=(
-                "This response is generated from the retrieved regulatory documents "
-                "and is intended for informational purposes only. It should not be "
-                "considered legal, regulatory, or compliance advice. Always refer to "
-                "the official regulator publications before making compliance decisions."
-            ),
-            # langsmith_trace_id=trace_id,
-        )
-
-        return UserQueryResponse(
-            retrieval=retrieval,
-            query_response=query_response,
-        )
+                f"Agent execution failed: {str(e)}"
+            ) from e
 
     def build_citations(self, documents: list[RetrievedDocument]):
+
+        logger.info("Building citations.")
+
         seen = set()
         citations = []
 
@@ -256,9 +217,17 @@ class RagAgent:
                     excerpt=doc.content[:250].strip(),
                 )
             )
+
+        logger.info("Generated %s citations.", len(citations))
+
         return citations
 
-    def calculate_confidence(self, retrieval: RetrievalResult):
+    def calculate_confidence(
+        self,
+        retrieval: RetrievalResult,
+    ):
+
+        logger.info("Calculating confidence score.")
 
         scores = [
             doc.retrieval_score
@@ -275,8 +244,19 @@ class RagAgent:
 
         coverage = min(len(scores) / 5, 1)
 
-        confidence = 0.6 * top_score + 0.3 * avg_score + 0.1 * coverage
+        confidence = (
+            0.6 * top_score
+            + 0.3 * avg_score
+            + 0.1 * coverage
+        )
 
-        # compress extreme differences
         confidence = 0.5 + (confidence * 0.5)
-        return round(confidence, 2)
+
+        confidence = round(confidence, 2)
+
+        logger.info(
+            "Confidence Score: %.2f",
+            confidence,
+        )
+
+        return confidence

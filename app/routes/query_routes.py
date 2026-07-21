@@ -1,4 +1,6 @@
-from fastapi import APIRouter
+from fastapi import APIRouter, HTTPException
+
+from app.core.logger import logger
 from app.schema.query_request import QueryRequest
 from app.schema.query_response import (
     QueryResponse,
@@ -20,9 +22,27 @@ service = QueryService()
 )
 def query(request: QueryRequest):
 
-    result = service.query(request.query)
+    try:
 
-    return result.query_response
+        logger.info("Received query request.")
+
+        result = service.query(request.query)
+
+        logger.info("Query completed successfully.")
+
+        return result.query_response
+
+    except HTTPException:
+        raise
+
+    except Exception as e:
+
+        logger.exception("Query endpoint failed.")
+
+        raise HTTPException(
+            status_code=500,
+            detail=f"Internal Server Error: {str(e)}"
+        ) from e
 
 
 @router.post(
@@ -31,4 +51,24 @@ def query(request: QueryRequest):
 )
 def query_debug(request: QueryRequest):
 
-    return service.query(request.query)
+    try:
+
+        logger.info("Received debug query request.")
+
+        result = service.query(request.query)
+
+        logger.info("Debug query completed successfully.")
+
+        return result
+
+    except HTTPException:
+        raise
+
+    except Exception as e:
+
+        logger.exception("Debug endpoint failed.")
+
+        raise HTTPException(
+            status_code=500,
+            detail=f"Internal Server Error: {str(e)}"
+        ) from e
