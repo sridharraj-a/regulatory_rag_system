@@ -40,8 +40,7 @@ def query(request: QueryRequest):
         logger.exception("Query endpoint failed.")
 
         raise HTTPException(
-            status_code=500,
-            detail=f"Internal Server Error: {str(e)}"
+            status_code=500, detail=f"Internal Server Error: {str(e)}"
         ) from e
 
 
@@ -69,6 +68,5 @@ def query_debug(request: QueryRequest):
         logger.exception("Debug endpoint failed.")
 
         raise HTTPException(
-            status_code=500,
-            detail=f"Internal Server Error: {str(e)}"
+            status_code=500, detail=f"Internal Server Error: {str(e)}"
         ) from e

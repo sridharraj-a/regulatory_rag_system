@@ -59,14 +59,10 @@ def ingest_pdf(file_path: str) -> None:
         # -------------------------------------------------
 
         if not os.path.exists(file_path):
-            raise FileNotFoundError(
-                f"PDF not found: {file_path}"
-            )
+            raise FileNotFoundError(f"PDF not found: {file_path}")
 
         if not file_path.lower().endswith(".pdf"):
-            raise ValueError(
-                "Only PDF files are supported."
-            )
+            raise ValueError("Only PDF files are supported.")
 
         logger.info("Loading PDF...")
 
@@ -75,9 +71,7 @@ def ingest_pdf(file_path: str) -> None:
         docs = loader.load()
 
         if not docs:
-            raise ValueError(
-                "PDF contains no readable content."
-            )
+            raise ValueError("PDF contains no readable content.")
 
         logger.info("Loaded %s pages.", len(docs))
 
@@ -115,8 +109,8 @@ def ingest_pdf(file_path: str) -> None:
         logger.info("Chunking document...")
 
         splitter = RecursiveCharacterTextSplitter(
-            chunk_size=512,
-            chunk_overlap=100,
+            chunk_size=300,
+            chunk_overlap=60,
             length_function=token_length,
             separators=[
                 "\n\n",
@@ -131,9 +125,7 @@ def ingest_pdf(file_path: str) -> None:
         chunks = splitter.split_documents(docs)
 
         if not chunks:
-            raise ValueError(
-                "Chunking failed. No chunks were created."
-            )
+            raise ValueError("Chunking failed. No chunks were created.")
 
         logger.info(
             "Total chunks created: %s",
@@ -146,9 +138,7 @@ def ingest_pdf(file_path: str) -> None:
 
         logger.info("Connecting to PGVector...")
 
-        vector_store = get_vector_store(
-            collection_name="reg_support_desk"
-        )
+        vector_store = get_vector_store(collection_name="reg_support_desk")
 
         logger.info("Saving embeddings...")
 
@@ -175,18 +165,14 @@ def ingest_pdf(file_path: str) -> None:
 
         logger.exception("Unexpected error during ingestion.")
 
-        raise RuntimeError(
-            f"PDF ingestion failed: {str(e)}"
-        ) from e
+        raise RuntimeError(f"PDF ingestion failed: {str(e)}") from e
 
 
 if __name__ == "__main__":
 
     try:
 
-        ingest_pdf(
-            r"app\data\Capstone_Project_1_Regulatory_Compliance_System_FAQ.pdf"
-        )
+        ingest_pdf(r"app\data\Capstone_Project_1_Regulatory_Compliance_System_FAQ.pdf")
 
     except Exception as e:
 

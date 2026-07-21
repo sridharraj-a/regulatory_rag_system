@@ -100,17 +100,13 @@ def _search_fts(
                 }
             )
 
-        return {
-            "documents": _sort_by_freshness(output)
-        }
+        return {"documents": _sort_by_freshness(output)}
 
     except Exception as e:
 
         logger.exception("FTS Search failed.")
 
-        raise RuntimeError(
-            f"FTS Search failed: {str(e)}"
-        ) from e
+        raise RuntimeError(f"FTS Search failed: {str(e)}") from e
 
 
 search_fts = tool(_search_fts)
@@ -122,8 +118,9 @@ def _search_vector(
     collection_name: str = "reg_support_desk",
 ):
     """
-    Use ONLY for semantic or conceptual questions.
-    """
+    Use ONLY for semantic or conceptual questions (what, why, how, explanation, comparison, summary).
+    Never use if the question contains specific regulatory terms,
+    numbers, clauses or abbreviations."""
 
     try:
 
@@ -159,17 +156,13 @@ def _search_vector(
                 }
             )
 
-        return {
-            "documents": _sort_by_freshness(output)
-        }
+        return {"documents": _sort_by_freshness(output)}
 
     except Exception as e:
 
         logger.exception("Vector Search failed.")
 
-        raise RuntimeError(
-            f"Vector Search failed: {str(e)}"
-        ) from e
+        raise RuntimeError(f"Vector Search failed: {str(e)}") from e
 
 
 search_vector = tool(_search_vector)
@@ -182,7 +175,8 @@ def _search_hybrid(
     collection_name: str = "reg_support_desk",
 ):
     """
-    Use ONLY when both semantic and exact search are required.
+    Use ONLY when the query contains both
+    conceptual language and exact regulatory terminology.
     """
 
     try:
@@ -208,10 +202,7 @@ def _search_hybrid(
 
             key = doc["content"][:120]
 
-            rrf_scores[key] = (
-                rrf_scores.get(key, 0)
-                + 1 / (60 + rank + 1)
-            )
+            rrf_scores[key] = rrf_scores.get(key, 0) + 1 / (60 + rank + 1)
 
             chunk_map[key] = {
                 "content": doc["content"],
@@ -222,10 +213,7 @@ def _search_hybrid(
 
             key = item["content"][:120]
 
-            rrf_scores[key] = (
-                rrf_scores.get(key, 0)
-                + 1 / (60 + rank + 1)
-            )
+            rrf_scores[key] = rrf_scores.get(key, 0) + 1 / (60 + rank + 1)
 
             chunk_map[key] = {
                 "content": item["content"],
@@ -238,10 +226,7 @@ def _search_hybrid(
             reverse=True,
         )
 
-        rrf_values = [
-            score
-            for _, score in ranked[:k]
-        ]
+        rrf_values = [score for _, score in ranked[:k]]
 
         max_rrf = max(rrf_values)
         min_rrf = min(rrf_values)
@@ -253,11 +238,7 @@ def _search_hybrid(
             if max_rrf == min_rrf:
                 normalized_score = 1.0
             else:
-                normalized_score = (
-                    score - min_rrf
-                ) / (
-                    max_rrf - min_rrf
-                )
+                normalized_score = (score - min_rrf) / (max_rrf - min_rrf)
 
             documents.append(
                 {
@@ -276,17 +257,13 @@ def _search_hybrid(
             len(documents),
         )
 
-        return {
-            "documents": _sort_by_freshness(documents)
-        }
+        return {"documents": _sort_by_freshness(documents)}
 
     except Exception as e:
 
         logger.exception("Hybrid Search failed.")
 
-        raise RuntimeError(
-            f"Hybrid Search failed: {str(e)}"
-        ) from e
+        raise RuntimeError(f"Hybrid Search failed: {str(e)}") from e
 
 
 search_hybrid = tool(_search_hybrid)

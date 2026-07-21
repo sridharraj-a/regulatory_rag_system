@@ -19,9 +19,7 @@ def get_embeddings() -> OpenAIEmbeddings:
 
     try:
         if not EMBEDDING_MODEL:
-            raise ValueError(
-                "EMBEDDING_MODEL is missing in the .env file."
-            )
+            raise ValueError("EMBEDDING_MODEL is missing in the .env file.")
 
         logger.info("Loading embedding model...")
 
@@ -36,9 +34,7 @@ def get_embeddings() -> OpenAIEmbeddings:
 
     except Exception as e:
         logger.exception("Failed to initialize embedding model.")
-        raise RuntimeError(
-            f"Embedding initialization failed: {str(e)}"
-        ) from e
+        raise RuntimeError(f"Embedding initialization failed: {str(e)}") from e
 
 
 def get_vector_store(
@@ -51,9 +47,7 @@ def get_vector_store(
 
     try:
         if not PG_CONNECTION:
-            raise ValueError(
-                "PG_CONNECTION_STRING is missing in the .env file."
-            )
+            raise ValueError("PG_CONNECTION_STRING is missing in the .env file.")
 
         logger.info(
             "Connecting to PGVector collection: %s",
@@ -75,6 +69,4 @@ def get_vector_store(
     except Exception as e:
         logger.exception("Failed to initialize PGVector.")
 
-        raise RuntimeError(
-            f"Database connection failed: {str(e)}"
-        ) from e
+        raise RuntimeError(f"Database connection failed: {str(e)}") from e

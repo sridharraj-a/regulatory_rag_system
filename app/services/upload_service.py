@@ -24,12 +24,9 @@ def save_uploaded_file(file: UploadFile) -> str:
             file.filename,
         )
 
-        # Optional: Prevent duplicate uploads
+        #  Prevent duplicate uploads
         if os.path.exists(file_path):
-            raise HTTPException(
-                status_code=409,
-                detail="File already exists."
-            )
+            raise HTTPException(status_code=409, detail="File already exists.")
 
         logger.info("Saving file: %s", file_path)
 
@@ -46,9 +43,7 @@ def save_uploaded_file(file: UploadFile) -> str:
     except Exception as e:
         logger.exception("Error while saving uploaded file.")
 
-        raise RuntimeError(
-            f"Unable to save uploaded file: {str(e)}"
-        ) from e
+        raise RuntimeError(f"Unable to save uploaded file: {str(e)}") from e
 
 
 def process_upload(file: UploadFile):
@@ -61,24 +56,15 @@ def process_upload(file: UploadFile):
         logger.info("========== FILE UPLOAD STARTED ==========")
 
         if file is None:
-            raise HTTPException(
-                status_code=400,
-                detail="No file uploaded."
-            )
+            raise HTTPException(status_code=400, detail="No file uploaded.")
 
         if not file.filename:
-            raise HTTPException(
-                status_code=400,
-                detail="Filename is missing."
-            )
+            raise HTTPException(status_code=400, detail="Filename is missing.")
 
         extension = os.path.splitext(file.filename)[1].lower()
 
         if extension not in ALLOWED_EXTENSIONS:
-            raise HTTPException(
-                status_code=400,
-                detail="Only PDF files are supported."
-            )
+            raise HTTPException(status_code=400, detail="Only PDF files are supported.")
 
         logger.info("Uploading file: %s", file.filename)
 
@@ -104,7 +90,4 @@ def process_upload(file: UploadFile):
 
         logger.exception("Upload failed.")
 
-        raise HTTPException(
-            status_code=500,
-            detail=f"Upload failed: {str(e)}"
-        ) from e
+        raise HTTPException(status_code=500, detail=f"Upload failed: {str(e)}") from e

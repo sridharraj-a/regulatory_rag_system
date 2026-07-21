@@ -18,10 +18,7 @@ class QueryService:
 
             if not query.strip():
 
-                raise HTTPException(
-                    status_code=400,
-                    detail="Query cannot be empty."
-                )
+                raise HTTPException(status_code=400, detail="Query cannot be empty.")
 
             logger.info("User Query: %s", query)
 
@@ -39,6 +36,5 @@ class QueryService:
             logger.exception("Query Service failed.")
 
             raise HTTPException(
-                status_code=500,
-                detail=f"Query processing failed: {str(e)}"
+                status_code=500, detail=f"Query processing failed: {str(e)}"
             ) from e

@@ -17,9 +17,7 @@ MAX_FILE_SIZE = 10 * 1024 * 1024  # 10 MB
 
 
 @router.post("/")
-async def upload_document(
-    file: UploadFile = File(...)
-):
+async def upload_document(file: UploadFile = File(...)):
     """
     Upload a PDF document and start the ingestion pipeline.
     """
@@ -29,31 +27,19 @@ async def upload_document(
         logger.info("Received upload request.")
 
         if file is None:
-            raise HTTPException(
-                status_code=400,
-                detail="No file uploaded."
-            )
+            raise HTTPException(status_code=400, detail="No file uploaded.")
 
         if not file.filename:
-            raise HTTPException(
-                status_code=400,
-                detail="Filename is missing."
-            )
+            raise HTTPException(status_code=400, detail="Filename is missing.")
 
         if file.content_type != "application/pdf":
-            raise HTTPException(
-                status_code=400,
-                detail="Only PDF files are allowed."
-            )
+            raise HTTPException(status_code=400, detail="Only PDF files are allowed.")
 
         # Validate file size
         contents = await file.read()
 
         if len(contents) > MAX_FILE_SIZE:
-            raise HTTPException(
-                status_code=413,
-                detail="Maximum file size is 10 MB."
-            )
+            raise HTTPException(status_code=413, detail="Maximum file size is 10 MB.")
 
         # Reset file pointer
         await file.seek(0)
@@ -74,6 +60,5 @@ async def upload_document(
         logger.exception("Upload API failed.")
 
         raise HTTPException(
-            status_code=500,
-            detail=f"Internal Server Error: {str(e)}"
+            status_code=500, detail=f"Internal Server Error: {str(e)}"
         ) from e
