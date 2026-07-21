@@ -52,6 +52,7 @@ class RagAgent:
 
             If the query is unrelated to banking or banking regulations:
             - Do not call any retrieval tool.
+            - Mention clearly that you can only assist with Banking regulations related queries. 
             - Return the structured response with retrieval empty.
 
             Choose exactly ONE retrieval tool:

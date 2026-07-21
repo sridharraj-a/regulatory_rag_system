@@ -109,8 +109,8 @@ def ingest_pdf(file_path: str) -> None:
         logger.info("Chunking document...")
 
         splitter = RecursiveCharacterTextSplitter(
-            chunk_size=300,
-            chunk_overlap=60,
+            chunk_size=512,
+            chunk_overlap=100,
             length_function=token_length,
             separators=[
                 "\n\n",
