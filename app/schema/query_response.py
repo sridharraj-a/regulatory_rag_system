@@ -31,7 +31,7 @@ class Citation(BaseModel):
 
 
 class QueryResponse(BaseModel):
-    #    query: str
+    query: str
     answer: str
     citations: List[Citation]
     rule_summary: List[str]
@@ -64,8 +64,8 @@ class RetrievalResult(BaseModel):
 
 class UserQueryResponse(BaseModel):
     #    analysis: QueryAnalysis
-    retrieval: RetrievalResult
     query_response: QueryResponse
+    retrieval: RetrievalResult
 
 
 class LLMAnswer(BaseModel):

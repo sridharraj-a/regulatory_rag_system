@@ -225,6 +225,7 @@ class RagAgent:
             citations = self.build_citations(retrieval.documents)
 
             query_response = QueryResponse(
+                query=query,
                 answer=llm_response.answer,
                 rule_summary=llm_response.rule_summary,
                 citations=citations,

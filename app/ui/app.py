@@ -1,138 +1,105 @@
-import requests
 import streamlit as st
 
-API_URL = "http://127.0.0.1:8000/api/v1/query"
+from api import query_api
+from components import (
+    render_user_message,
+    render_assistant_response,
+    render_developer_details,
+)
+from sidebar import render_sidebar
+from styles import apply_styles
 
-st.set_page_config(page_title="Regulatory RAG Assistant", page_icon="🏦", layout="wide")
+# --------------------------------------------------
+# Page Configuration
+# --------------------------------------------------
+st.set_page_config(
+    page_title="Banking Regulatory Assistant",
+    page_icon="🏦",
+    layout="wide",
+)
+
+apply_styles()
 
 st.title("🏦 Banking Regulatory Assistant")
 
-# ---------------------------------------------------
-# Initialize chat history
-# ---------------------------------------------------
+# --------------------------------------------------
+# Sidebar
+# --------------------------------------------------
+developer_mode = render_sidebar()
+
+# --------------------------------------------------
+# Session State
+# --------------------------------------------------
 if "messages" not in st.session_state:
     st.session_state.messages = []
 
-# ---------------------------------------------------
-# Display previous conversation
-# ---------------------------------------------------
+# --------------------------------------------------
+# Display Conversation History
+# --------------------------------------------------
 for message in st.session_state.messages:
 
     with st.chat_message(message["role"]):
 
-        st.markdown(message["content"])
+        if message["role"] == "user":
 
-        if message["role"] == "assistant":
+            render_user_message(message["content"])
 
-            st.subheader("Summary")
+        else:
 
-            for rule in message["rule_summary"]:
-                st.write(f"• {rule}")
+            render_assistant_response(message["response"]["query_response"])
 
-            confidence = message["confidence_score"]
+            if developer_mode:
+                render_developer_details(message["response"]["retrieval"])
 
-            st.subheader("Confidence")
-
-            col1, col2 = st.columns([4, 1])
-
-            with col1:
-                st.progress(confidence)
-
-            with col2:
-                st.write(f"{confidence:.0%}")
-
-            with st.expander("Sources"):
-
-                for citation in message["citations"]:
-
-                    st.markdown(f"**📄 Document:** {citation['source']}")
-
-                    st.markdown(f"**📑 Page:** {citation['page']}")
-
-                    st.markdown(f"**📚 Section:** {citation['section']}")
-
-                    st.markdown("**Excerpt:**")
-
-                    st.info(citation["excerpt"])
-
-                    st.divider()
-            with st.expander("⚠️ Regulatory Disclaimer"):
-
-                st.info(message["disclaimer"])
-
-
-# ---------------------------------------------------
-# Chat input
-# ---------------------------------------------------
+# --------------------------------------------------
+# Chat Input
+# --------------------------------------------------
 prompt = st.chat_input("Ask a banking regulation question...")
 
 if prompt:
 
-    # Show user message immediately
-    st.session_state.messages.append({"role": "user", "content": prompt})
+    # ----------------------------------------------
+    # Save & Display User Message
+    # ----------------------------------------------
+    st.session_state.messages.append(
+        {
+            "role": "user",
+            "content": prompt,
+        }
+    )
 
     with st.chat_message("user"):
-        st.markdown(prompt)
+        render_user_message(prompt)
 
-    # Call FastAPI
+    # ----------------------------------------------
+    # Assistant Response
+    # ----------------------------------------------
     with st.chat_message("assistant"):
 
-        with st.spinner("Searching regulations..."):
+        with st.spinner("Searching regulatory documents..."):
 
-            response = requests.post(API_URL, json={"query": prompt})
+            result, error = query_api(prompt)
 
-        if response.status_code != 200:
-            st.error(response.text)
+        if error:
+
+            st.error("Unable to process your request.")
+
+            with st.expander("Technical Details"):
+                st.code(error)
+
             st.stop()
 
-        result = response.json()
+        render_assistant_response(result["query_response"])
 
-        st.markdown(result["answer"])
+        if developer_mode:
+            render_developer_details(result["retrieval"])
 
-        st.subheader("Summary")
-
-        for rule in result["rule_summary"]:
-            st.write(f"• {rule}")
-
-        confidence = result["confidence_score"]
-
-        st.subheader("Confidence")
-
-        col1, col2 = st.columns([4, 1])
-
-        with col1:
-            st.progress(confidence)
-
-        with col2:
-            st.write(f"{confidence:.0%}")
-
-        with st.expander("Sources"):
-
-            for citation in result["citations"]:
-
-                st.markdown(f"**📄 Document:** {citation['source']}")
-
-                st.markdown(f"**📑 Page:** {citation['page']}")
-
-                st.markdown(f"**📚 Section:** {citation['section']}")
-
-                st.markdown("**Excerpt:**")
-
-                st.info(citation["excerpt"])
-
-                st.divider()
-        with st.expander("⚠️ Regulatory Disclaimer"):
-
-            st.info(result["disclaimer"])
-
-    # Save assistant response
+    # ----------------------------------------------
+    # Save Assistant Response
+    # ----------------------------------------------
     st.session_state.messages.append(
         {
             "role": "assistant",
-            "content": result["answer"],
-            "rule_summary": result["rule_summary"],
-            "confidence_score": result["confidence_score"],
-            "citations": result["citations"],
-            "disclaimer": result["disclaimer"],
+            "response": result,
         }
     )

@@ -3,7 +3,7 @@ from fastapi import APIRouter, HTTPException
 from app.core.logger import logger
 from app.schema.query_request import QueryRequest
 from app.schema.query_response import (
-    QueryResponse,
+    #  QueryResponse,
     UserQueryResponse,
 )
 from app.services.query_service import QueryService
@@ -18,7 +18,7 @@ service = QueryService()
 
 @router.post(
     "/",
-    response_model=QueryResponse,
+    response_model=UserQueryResponse,
 )
 def query(request: QueryRequest):
 
@@ -30,7 +30,7 @@ def query(request: QueryRequest):
 
         logger.info("Query completed successfully.")
 
-        return result.query_response
+        return result
 
     except HTTPException:
         raise
